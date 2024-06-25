@@ -1,0 +1,127 @@
+
+# draft version 0.1 - Botswana Import
+rm(list = ls()) # clean the work space
+dir() # print the documents in the directory
+setwd("L:/Stat/IDB/Work/zz_Ladji_work/Test/Imports/Botswana/Botswana1998") # set working directory work
+getwd()
+
+# install.packages("tidyverse")
+# install.packages("tidyr")
+# install.packages("xlsx")
+# install.packages('RecordLinkage')
+# install.packages('odbc')
+
+library(tidyr)
+library(tidyverse)
+library(readxl)
+library(dplyr)
+library('RecordLinkage')
+library(data.table)
+library('DBI') # connections with database
+library("xlsx")
+library('tibble') # tibble dataframe
+library('stringr') # string processing
+library('xlsx')
+library('odbc')
+library('RODBC')
+
+source("cff_dbi_v12.R") (Only used for connecting the database)
+
+# read the table function from the database
+dbreadDT <- function(connection, name){dbReadTable(connection, name, check.names = F) %>% select_all()}
+
+
+data <- read_excel("L:/Stat/IDB/Work/zz_Ladji_work/Test/Imports/Botswana/Botswana1998/updated_botswana98.xlsx") %>% data.table()
+
+data1 <- melt(data,id.vars =c('HS','Description')) 
+
+data2 <- separate(data1, variable,sep ="_", into = c("Country","Indicator"))
+
+data3 <- spread(data2,Indicator,value) %>% filter(`BWP Value`!=0)
+
+# Write the first data set in a new workbook
+write.xlsx (data, file = "botswana1998.xlsx", sheetName = "TM", append = FALSE)
+
+# TM table ----------------------------------------------------------------
+
+data4 <- read_excel("L:/Stat/IDB/Work/zz_Ladji_work/Test/Imports/Botswana/Botswana1998/TM_botswana98.xlsx")
+
+Partner <- unique(c(data4$Partner))
+
+Partner = AttachCountryCode(Partner, lang= 1, year = 1998)$one
+
+# write.csv(Partner,'Partner98.csv')
+
+Partnercode <- read_excel('updatedpartner.xlsx') %>% data.table
+
+# Merging ------
+
+# data5 <- merge(data4,Partnercode, by  = "Partner") 
+
+data5 <- merge(data4, Partnercode[, c("Partner", "WTO Country Code")], by="Partner")
+names(Partnercode)
+
+# TM table ----------------------------------------------------------------
+exchange.rate = 4.22588
+# create a TM table as required in the Access database
+mydata_table <- data.table(data5)
+TM <- mydata_table[,.(
+  Reporter = 'C072',
+  Year = '1998',
+  TL = paste0(as.character(`TL`),'00'),
+  TLS = '  ',
+  `Duty Scheme Code` = 'A0002',
+  `Partner` = as.character(`WTO Country Code`),
+  Quota = 'Out',
+  `Trade Flow` = 'I',
+  Value = as.numeric(`BWP Value`)/exchange.rate,
+  NatValue = as.numeric(`BWP Value`),
+  `PQty Unit` = '167',
+  `PQty` = as.numeric(`Qty`), 
+  `SQty Unit` = as.numeric(NA),
+  `SQty` = as.numeric(NA),
+  `Record Status` = 'R')]
+
+
+
+ch <- dbAccess( "L:/Stat/IDB/Work/zz_Ladji_work/Test/Imports/Botswana/Botswana1998/Botswana98.accdb")
+TM_agg <- TMagregate(TM)
+isDuplicated <- TM_agg[,.(Reporter,Year,TL,TLS,`Duty Scheme Code`,`Partner`,Quota,`Trade Flow`)] %>% duplicated
+
+TM_agg[isDuplicated]
+
+TC <- dbFetchDT(ch,'TC')
+
+allTL <- unique(TM$TL)
+allTL[!allTL %in% TC$TL]
+
+DeleteAllrows(ch,'TC')
+SaveAccessTable(ch,TM_agg,'TC',append.data = T)
+
+
+# Adding additional TL in TT and TC to match TM's ------
+
+TC <- dbFetchDT(ch,'TC')
+write.csv(TC,'TC98.csv')
+
+TT <- dbFetchDT(ch,'TT')
+write.csv(TT,'TT98.csv')
+
+TC98 <- data.frame("L:/Stat/IDB/Work/zz_Ladji_work/Test/Imports/Botswana/Botswana1998/TC98.xlsx")
+TT98 <- read_excel("L:/Stat/IDB/Work/zz_Ladji_work/Test/Imports/Botswana/Botswana1998/TT98.xlsx")
+ 
+
+
+db <-("L:/Stat/IDB/Work/zz_Ladji_work/Test/Imports/Botswana/Botswana1998/Botswana98.accdb") 
+Mycon <- odbcConnectAccess2007(db)
+sqlSave(Mycon,'db')
+
+
+
+
+
+samp[, lf5 := ifelse(loadfactor5 < 0, 0, loadfactor5)]
+
+
+
+
